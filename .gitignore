@@ -1,0 +1,8 @@
+# Virtual environments
+.venv/
+venv/
+.env
+
+
+# macOS Finder metadata
+.DS_Store
