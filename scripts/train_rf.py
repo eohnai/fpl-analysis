@@ -1,7 +1,6 @@
 import os
 import argparse
 import time
-import logging
 import numpy as np
 import pandas as pd
 from typing import List, Tuple, Dict, Any
@@ -15,7 +14,6 @@ import requests
 from logging import Logger
 
 FPL_BASE_URL = 'https://fantasy.premierleague.com/api/'
-logger = logging.getLogger(__name__)
 
 def get_supabase(logger: Logger) -> Client:
     """Get the supabase client"""
