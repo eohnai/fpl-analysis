@@ -1,5 +1,6 @@
 import os
 import argparse
+import logging
 import time
 import numpy as np
 import pandas as pd
@@ -11,11 +12,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 from joblib import dump
 import requests
-from logging import Logger
+ 
 
 FPL_BASE_URL = 'https://fantasy.premierleague.com/api/'
+logger = logging.getLogger("train_rf")
 
-def get_supabase(logger: Logger) -> Client:
+def get_supabase() -> Client:
     """Get the supabase client"""
     logger.info("Loading environment variables for Supabase...")
     try:
@@ -30,7 +32,7 @@ def get_supabase(logger: Logger) -> Client:
 
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def load_data(supabase: Client, logger: Logger) -> tuple[pd.DataFrame, pd.DataFrame]:
+def load_data(supabase: Client) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load the data from the supabase client"""
     logger.info("Loading data from supabase...")
     try:
@@ -41,12 +43,12 @@ def load_data(supabase: Client, logger: Logger) -> tuple[pd.DataFrame, pd.DataFr
         teams = pd.DataFrame(teams_data)
         logger.info("Loaded tables: players=%d rows, teams=%d rows", len(players), len(teams))
     except Exception as e:
-        logger.error(f"Error loading data from supabase: {e}")
+        logger.error("Error loading data from supabase: %s", e)
         raise
 
     return players, teams
 
-def build_dataset(players: pd.DataFrame, teams: pd.DataFrame, logger: Logger) -> Tuple[pd.DataFrame, pd.Series, List[str]]:
+def build_dataset(players: pd.DataFrame, teams: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, List[str]]:
     """Build the dataset for training"""
     logger.info("Building dataset...")
     df = players.merge(teams[['id', 'strength']], left_on='team_id', right_on='id', suffixes=('', '_team'))
@@ -60,7 +62,7 @@ def build_dataset(players: pd.DataFrame, teams: pd.DataFrame, logger: Logger) ->
 
     return X, y, features
 
-def train_model(X: pd.DataFrame, y: pd.Series, n_estimators: int, random_state: int, logger: Logger) -> Tuple[RandomForestRegressor, Dict[str, float]]:
+def train_model(X: pd.DataFrame, y: pd.Series, n_estimators: int, random_state: int) -> Tuple[RandomForestRegressor, Dict[str, float]]:
     """Train the Random Forest model"""
     logger.info("Training model...")
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_state)
@@ -80,15 +82,15 @@ def train_model(X: pd.DataFrame, y: pd.Series, n_estimators: int, random_state: 
     logger.info("Evaluation metrics: R2=%.3f RMSE=%.2f", metrics["r2"], metrics["rmse"])
     return model, metrics
 
-def save_artifacts(model: RandomForestRegressor, features: List[str], path: str, logger: Logger) -> None:
+def save_artifacts(model: RandomForestRegressor, features: List[str], path: str) -> None:
     """Save the model and features to a joblib file"""
-    logger.info(f"Saving model artifacts to {path}...")
+    logger.info("Saving model artifacts to %s...", path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     dump({"model": model, "features": features}, path)
     
-    logger.info(f"Saved model artifact: {path}")
+    logger.info("Saved model artifact: %s", path)
 
-def compute_projection(players: pd.DataFrame, teams: pd.DataFrame, weeks: int, logger: Logger) -> pd.Series:
+def compute_projection(players: pd.DataFrame, teams: pd.DataFrame, weeks: int) -> pd.Series:
     """Compute projection based on upcoming fixtures and team strengths"""
     def get_fpl(endpoint: str):
         return requests.get(FPL_BASE_URL + endpoint, timeout=30).json()
@@ -149,8 +151,7 @@ def compute_projection(players: pd.DataFrame, teams: pd.DataFrame, weeks: int, l
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
-    log: Logger = logger
-    log.info("Starting Random Forest training job")
+    logger.info("Starting Random Forest training job")
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_estimators", type=int, default=100)
     parser.add_argument("--random_state", type=int, default=42)
@@ -159,31 +160,31 @@ def main():
     args = parser.parse_args()
 
     try:
-        supabase = get_supabase(log)
+        supabase = get_supabase()
     except Exception:
-        log.error("Supabase initialization failed", exc_info=True)
+        logger.error("Supabase initialization failed", exc_info=True)
         raise SystemExit(1)
 
     try:
         t_load = time.time()
-        players, teams = load_data(supabase, log)
-        log.info("Data loaded in %.2f s", time.time() - t_load)
+        players, teams = load_data(supabase)
+        logger.info("Data loaded in %.2f s", time.time() - t_load)
     except Exception:
-        log.error("Data load failed", exc_info=True)
+        logger.error("Data load failed", exc_info=True)
         raise SystemExit(1)
 
-    X, y, features = build_dataset(players, teams, log)
-    model, metrics = train_model(X, y, args.n_estimators, args.random_state, log)
-    log.info("Metrics summary: R2=%.3f RMSE=%.2f", metrics['r2'], metrics['rmse'])
+    X, y, features = build_dataset(players, teams)
+    model, metrics = train_model(X, y, args.n_estimators, args.random_state)
+    logger.info("Metrics summary: R2=%.3f RMSE=%.2f", metrics['r2'], metrics['rmse'])
 
     players = players.copy()
     players['predicted_points'] = model.predict(X)
     players['value_diff'] = players['total_points'] - players['predicted_points']
 
-    players['xPts_next_5gw'] = compute_projection(players, teams, weeks=args.projection_weeks, logger=log)
+    players['xPts_next_5gw'] = compute_projection(players, teams, weeks=args.projection_weeks)
 
-    save_artifacts(model, features, args.artifact_path, log)
-    log.info("Training job completed successfully")
+    save_artifacts(model, features, args.artifact_path)
+    logger.info("Training job completed successfully")
 
 if __name__ == "__main__":
     main()
