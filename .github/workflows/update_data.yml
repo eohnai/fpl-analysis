@@ -40,10 +40,3 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python scripts/export_data.py
-
-      - name: Commit and push changes (Data Export)
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add data/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update FPL data $(date +'%Y-%m-%d %H:%M UTC')" && git push)
