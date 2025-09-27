@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 
-class TeamRequest(BaseModel):
+class Team(BaseModel):
     players: List[str]
     bank: float
     free_transfers: int

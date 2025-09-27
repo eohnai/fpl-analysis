@@ -1,12 +1,12 @@
 from fastapi import APIRouter
-from app.schemas.team import TeamRequest
+from app.schemas.team import Team
 from ml.predictor import predict_points
 from tools.news_tool import fetch_latest_news
 
 router = APIRouter(prefix="/fpl", tags=["FPL Suggestions"])
 
 @router.post("/suggest_transfers")
-def suggest_transfers(request: TeamRequest):
+def suggest_transfers(request: Team):
     predictions = predict_points(request.players)
     news = fetch_latest_news()
 
