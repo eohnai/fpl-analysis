@@ -18,10 +18,12 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown events."""
+    # check if TELEGRAM_BOT_TOKEN is set
     if not TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN is not set. Exiting.")
         raise ValueError("TELEGRAM_BOT_TOKEN is not set in environment variables.")
     
+    # startup: register webhook with Telegram using ngrok URL
     try:
         tunnels = requests.get("http://localhost:4040/api/tunnels").json()
         public_url = None
@@ -46,6 +48,18 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error setting webhook: {e}")
 
     yield
+
+    # shutdown: remove webhook
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteWebhook"
+        )
+        if response.status_code == 200:
+            logger.info("Telegram webhook deleted.")
+        else:
+            logger.warning(f"Failed to delete webhook: {response.text}")
+    except Exception as e:
+        logger.error(f"Error deleting webhook: {e}")
 
 app = FastAPI(lifespan=lifespan)
 
